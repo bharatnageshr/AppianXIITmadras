@@ -15,6 +15,7 @@ from pathlib import Path
 import io
 import openai
 import requests
+import stripe
 
 # Load environment variables
 load_dotenv()
@@ -27,10 +28,16 @@ logging.basicConfig(level=logging.INFO)
 MAX_PRODUCTS = 12
 CACHE_FILE = Path("blip_caption_cache.json")
 
+# Initialize Stripe
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+
 # Load BLIP model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
 blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base").to(device)
+
+# In-memory cart storage (for demo purposes - replace with database in production)
+user_carts = {}
 
 # Load cache
 if CACHE_FILE.exists():
@@ -175,6 +182,152 @@ def parse_filters_from_response(response_text):
     return filters
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+@app.route('/add-to-cart', methods=['POST'])
+def add_to_cart():
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default')  # In production, use actual user auth
+        product = data.get('product')
+        
+        if not product:
+            return jsonify({"error": "No product provided"}), 400
+
+        if user_id not in user_carts:
+            user_carts[user_id] = []
+
+        # Add product to cart
+        user_carts[user_id].append(product)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Added {product['title']} to cart",
+            "cart_count": len(user_carts[user_id])
+        })
+
+    except Exception as e:
+        logging.error("Add to cart error:", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/get-cart', methods=['GET'])
+def get_cart():
+    try:
+        user_id = request.args.get('user_id', 'default')
+        cart = user_carts.get(user_id, [])
+        
+        return jsonify({
+            "success": True,
+            "cart": cart,
+            "cart_count": len(cart)
+        })
+
+    except Exception as e:
+        logging.error("Get cart error:", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/create-checkout-session", methods=["POST"])
+def create_checkout_session():
+    try:
+        data = request.json
+        product = data.get('product')
+        
+        if not product:
+            return jsonify({"error": "No product provided"}), 400
+
+        # Convert price to cents (Stripe requires integer amount in smallest currency unit)
+        try:
+            # Remove any currency symbols and convert to float
+            price = float(re.sub(r'[^\d.]', '', product['price']))
+            amount = int(price * 100)  # Convert to cents/paisa
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid price format"}), 400
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'inr',
+                    'product_data': {
+                        'name': product['title'],
+                        'images': [product['image']] if product.get('image') else [],
+                    },
+                    'unit_amount': amount,
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url='http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url='http://localhost:3000/cancel',
+            metadata={
+                'product_id': product.get('product_id', ''),
+                'title': product['title']
+            }
+        )
+
+        return jsonify({
+            "success": True,
+            "url": session.url
+        })
+
+    except Exception as e:
+        logging.error("Checkout error:", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/create-cart-checkout-session", methods=["POST"])
+def create_cart_checkout_session():
+    try:
+        data = request.json
+        user_id = data.get('user_id', 'default')
+        cart = user_carts.get(user_id, [])
+        
+        if not cart:
+            return jsonify({"error": "Cart is empty"}), 400
+
+        line_items = []
+        for product in cart:
+            try:
+                price = float(re.sub(r'[^\d.]', '', product['price']))
+                amount = int(price * 100)
+                line_items.append({
+                    'price_data': {
+                        'currency': 'inr',
+                        'product_data': {
+                            'name': product['title'],
+                            'images': [product['image']] if product.get('image') else [],
+                        },
+                        'unit_amount': amount,
+                    },
+                    'quantity': 1,
+                })
+            except (ValueError, TypeError):
+                continue  # Skip invalid products
+
+        if not line_items:
+            return jsonify({"error": "No valid products in cart"}), 400
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=line_items,
+            mode='payment',
+            success_url='http://localhost:3000/success?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url='http://localhost:3000/cancel',
+            metadata={
+                'checkout_type': 'cart',
+                'user_id': user_id
+            }
+        )
+
+        # Clear cart after successful checkout creation
+        user_carts[user_id] = []
+
+        return jsonify({
+            "success": True,
+            "url": session.url
+        })
+
+    except Exception as e:
+        logging.error("Cart checkout error:", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/chat', methods=['POST'])
 def chat():
