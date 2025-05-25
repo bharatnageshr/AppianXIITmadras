@@ -3,18 +3,20 @@ import './App.css';
 
 const App = () => {
   const [products, setProducts] = useState([]);
+  const [cart, setCart] = useState([]);
   const [filters, setFilters] = useState({
     maxPrice: 5000,
     brand: '',
     color: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [showCart, setShowCart] = useState(false);
   const [currentCaption, setCurrentCaption] = useState("");
   const [activeTab, setActiveTab] = useState('upload');
   const [uploadedImage, setUploadedImage] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState(null); // <-- NEW
+  const [uploadedFile, setUploadedFile] = useState(null);
   const [imageDescription, setImageDescription] = useState('');
   const [messages, setMessages] = useState([
     {
@@ -46,7 +48,6 @@ const App = () => {
       }
     } catch (error) {
       console.error('Search error:', error);
-      // Fallback to mock data for demo
       const mockProducts = [
         {
           title: "Stylish Summer Dress",
@@ -81,7 +82,7 @@ const App = () => {
   
     try {
       const formData = new FormData();
-      formData.append("image", uploadedFile); // use the actual File object
+      formData.append("image", uploadedFile);
       formData.append("filters", JSON.stringify({
         brand: filters.brand,
         color: filters.color,
@@ -111,8 +112,6 @@ const App = () => {
       setIsAnalyzing(false);
     }
   };
-
-    
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -146,14 +145,13 @@ const App = () => {
       return;
     }
   
-    setUploadedFile(file); // <-- store the File
+    setUploadedFile(file);
     const reader = new FileReader();
     reader.onload = (e) => {
       setUploadedImage(e.target?.result);
     };
     reader.readAsDataURL(file);
   };
-
 
   const handleSendMessage = async (userMessage) => {
     setIsChatLoading(true);
@@ -176,14 +174,10 @@ const App = () => {
         return;
       }
   
-      // ✅ Update products from chatbot response
-      setProducts(data.products);  // THIS updates the recommendations
-  
-      // ✅ Update caption and filters
+      setProducts(data.products);
       setCurrentCaption(data.new_caption);
       setFilters(data.filters);
   
-      // ✅ Update chat messages
       setMessages((prev) => [
         ...prev,
         { role: 'user', content: userMessage },
@@ -197,12 +191,66 @@ const App = () => {
       setIsChatLoading(false);
     }
   };
-
+  const addToCart = (product) => {
+    setCart([...cart, product]);
+    alert(`${product.title} added to cart!`);
+  };
+  
+  const removeFromCart = (index) => {
+    const newCart = [...cart];
+    newCart.splice(index, 1);
+    setCart(newCart);
+  };
+  
+  const handleCartCheckout = async () => {
+    try {
+      const response = await fetch("http://localhost:5001/create-cart-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          cart: cart,
+          user_id: "user123" // Replace with actual user ID in a real app
+        }),
+      });
+      
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+    }
+  };
   const handleKeyPress = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage(inputMessage);
     }
+  };
+
+  const handleCheckout = async (product) => {
+    try {
+      const response = await fetch("http://localhost:5000/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(product),
+      });
+      const data = await response.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error("Checkout error:", err);
+    }
+  };
+
+  const handleAddToCart = (product) => {
+    setCart(prevCart => [...prevCart, product]);
+    alert(`${product.title} added to cart!`);
   };
 
   const popularColors = ['Red', 'Blue', 'Black', 'White', 'Pink', 'Green'];
@@ -242,6 +290,19 @@ const App = () => {
                   <circle cx="12" cy="7" r="4"/>
                 </svg>
               </button>
+            </div>
+            <div className="header-actions">
+              <button className="icon-button" onClick={() => setShowCart(!showCart)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="9" cy="21" r="1"/>
+                  <circle cx="20" cy="21" r="1"/>
+                  <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                {cart.length > 0 && (
+                  <span className="cart-badge">{cart.length}</span>
+                )}
+              </button>
+              {/* Other header buttons... */}
             </div>
           </div>
         </div>
@@ -475,6 +536,30 @@ const App = () => {
                               <p className="product-price">{product.price}</p>
                               <div className="product-footer">
                                 <span className="product-source">{product.source}</span>
+                                <div className="product-actions">
+                                <button
+                                  onClick={() => addToCart(product)}
+                                  className="add-to-cart-button"
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="9" cy="21" r="1"/>
+                                    <circle cx="20" cy="21" r="1"/>
+                                    <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                                  </svg>
+                                  <span>Add to Cart</span>
+                                </button>
+                                  <button
+                                    onClick={() => handleCheckout(product)}
+                                    className="buy-now-button"
+                                  >
+                                    <span>Buy Now</span>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+                                      <line x1="3" y1="6" x2="21" y2="6"/>
+                                      <path d="m16 10-4 4-4-4"/>
+                                    </svg>
+                                  </button>
+                                </div>
                                 <a
                                   href={product.link}
                                   target="_blank"
@@ -498,7 +583,6 @@ const App = () => {
                 </div>
               )}
             </div>
-            
             {/* Chat Assistant */}
             <div className="chat-sidebar">
               <div className="chat-card">
@@ -591,6 +675,49 @@ const App = () => {
             </div>
           </div>
         </div>
+        {showCart && (
+          <div className="cart-drawer">
+            <div className="cart-header">
+              <h3>Your Cart ({cart.length})</h3>
+              <button onClick={() => setShowCart(false)} className="close-cart">
+                &times;
+              </button>
+            </div>
+            {cart.length === 0 ? (
+              <div className="empty-cart">
+                <p>Your cart is empty</p>
+              </div>
+            ) : (
+              <div className="cart-items">
+                {cart.map((item, index) => (
+                  <div key={index} className="cart-item">
+                    <img src={item.image} alt={item.title} className="cart-item-image" />
+                    <div className="cart-item-details">
+                      <h4>{item.title}</h4>
+                      <p>{item.price}</p>
+                      <button 
+                        onClick={() => removeFromCart(index)}
+                        className="remove-item"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {cart.length > 0 && (
+              <div className="cart-footer">
+                <button 
+                  onClick={handleCartCheckout}
+                  className="checkout-button"
+                >
+                  Proceed to Checkout
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
