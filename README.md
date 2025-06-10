@@ -37,16 +37,18 @@
 ---
 
 ## 🧱 System Architecture
-mermaid
+```mermaid
 graph TD
-A[User Uploads Image] --> B[CLIP Embedding<br>Generation]
-A2[User Preferences] --> B
-B --> C[Similarity Matching<br>with Product Catalog]
-C --> D[Most Relevant<br>Catalog Description]
-D --> E[Fetch Results via<br>SerpAPI]
-E --> F[Recommendation Display<br>on Frontend]
-F --> G[Chatbot for Interaction<br>& Refinement]
-G --> H[Add to Cart<br>+ Checkout via Stripe]
+  A[User Uploads Image] --> B[CLIP Embedding<br>Generation]
+  A2[User Preferences] --> B
+  B --> C[Similarity Matching<br>with Product Catalog]
+  C --> D[Most Relevant<br>Catalog Description]
+  D --> E[Fetch Results via<br>SerpAPI]
+  E --> F[Recommendation Display<br>on Frontend]
+  F --> G[Chatbot for Interaction<br>& Refinement]
+  G --> H[Add to Cart<br>+ Checkout via Stripe]
+```
+
 
 
 ---
@@ -67,43 +69,42 @@ G --> H[Add to Cart<br>+ Checkout via Stripe]
 ---
 
 ## ⚙️ Setup Instructions
+# 🔧 Quick Start: How to Use This Codebase
 
-### 🔩 Backend Setup
+## 1. 🚀 Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/shop-smarter.git
-cd shop-smarter/backend
+git clone https://github.com/YourUsername/shop-smarter.git
+cd shop-smarter
+export SERP_API_KEY=your_serpapi_key
+export STRIPE_SECRET_KEY=your_stripe_key
 
-# Set up Python environment
+set SERP_API_KEY=your_serpapi_key
+set STRIPE_SECRET_KEY=your_stripe_key
+
+
+3. **📦 Install Dependencies**
+
+Ensure you have Python 3.8+ and Node.js installed.
+
+**Backend:
+cd backend
 python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
 pip install -r requirements.txt
 
-# Add your .env variables (including SerpAPI key)
-cp .env.example .env
-```
-
-### ▶️ Run Backend
-
-```bash
-python app.py
-```
-
-Accessible at: `http://localhost:5001`
-
----
-
-### 🌐 Frontend Setup
-
-```bash
+Frontend:
 cd ../frontend
 npm install
-npm start
-```
 
-Accessible at: `http://localhost:3000`
+4. ▶️ Run the Application
+**Backend:**
+cd backend
+python app.py
+
+**Frontend:**
+cd ../frontend
+npm start
 
 ---
 
